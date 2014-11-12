@@ -81,14 +81,19 @@ public abstract class NetworkParameters implements Serializable {
     protected String id;
 
     /**
-     * The depth of blocks required for a coinbase transaction to be spendable.
+     * The depth of blocks required for a coinbase or coinstake transaction to be spendable.
      */
     protected int spendableCoinbaseDepth;
-    protected int subsidyDecreaseBlockCount;
-    
+
     protected int[] acceptableAddressCodes;
     protected String[] dnsSeeds;
     protected Map<Integer, Sha256Hash> checkpoints = new HashMap<Integer, Sha256Hash>();
+
+    /** PoSV */
+    public static final int POW_TX_VERSION = 1;
+    public static final int POW_BLOCK_VERSION = 2;
+    public static final int COIN_YEAR_REWARD = 5;
+    protected int lastPoWBlock;
 
     protected NetworkParameters() {
         alertSigningKey = SATOSHI_KEY;
@@ -243,10 +248,6 @@ public abstract class NetworkParameters implements Serializable {
         return checkpointHash != null;
     }
 
-    public int getSubsidyDecreaseBlockCount() {
-        return subsidyDecreaseBlockCount;
-    }
-
     /** Returns DNS names that when resolved, give IP addresses of active peers. */
     public String[] getDnsSeeds() {
         return dnsSeeds;
@@ -327,4 +328,6 @@ public abstract class NetworkParameters implements Serializable {
     public byte[] getAlertSigningKey() {
         return alertSigningKey;
     }
+
+    public int getLastPoWBlock() { return lastPoWBlock; }
 }

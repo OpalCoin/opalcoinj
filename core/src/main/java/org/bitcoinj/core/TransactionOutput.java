@@ -215,6 +215,15 @@ public class TransactionOutput extends ChildMessage implements Serializable {
         this.value = value.value;
     }
 
+    public boolean isNull() {
+        maybeParse();
+        try {
+            return Coin.valueOf(value).equals(Coin.NEGATIVE_SATOSHI);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     /**
      * Gets the index of this output in the parent transaction, or throws if this output is free standing. Iterates
      * over the parents list to discover this.

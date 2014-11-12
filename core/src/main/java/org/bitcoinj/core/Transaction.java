@@ -107,6 +107,7 @@ public class Transaction extends ChildMessage implements Serializable {
     private ArrayList<TransactionOutput> outputs;
 
     private long lockTime;
+    private long time;
 
     // This is either the time the transaction was broadcast as measured from the local clock, or the time from the
     // block in which it was included. Note that this can be changed by re-orgs so the wallet may update this field.
@@ -173,7 +174,7 @@ public class Transaction extends ChildMessage implements Serializable {
 
     public Transaction(NetworkParameters params) {
         super(params);
-        version = 1;
+        version = 2;
         inputs = new ArrayList<TransactionInput>();
         outputs = new ArrayList<TransactionOutput>();
         // We don't initialize appearsIn deliberately as it's only useful for transactions stored in the wallet.
@@ -581,6 +582,14 @@ public class Transaction extends ChildMessage implements Serializable {
         }
         lockTime = readUint32();
         optimalEncodingMessageSize += 4;
+
+        if (version > params.POW_TX_VERSION) {
+            time = readUint32();
+            optimalEncodingMessageSize += 4;
+        } else {
+            time = 0;
+        }
+
         length = cursor - offset;
     }
 
@@ -603,6 +612,11 @@ public class Transaction extends ChildMessage implements Serializable {
     public boolean isCoinBase() {
         maybeParse();
         return inputs.size() == 1 && inputs.get(0).isCoinBase();
+    }
+
+    public boolean isCoinStake() {
+        maybeParse();
+        return inputs.size() > 0 && (!inputs.get(0).isCoinBase()) && outputs.size() >= 2 && outputs.get(0).isNull();
     }
 
     /**
