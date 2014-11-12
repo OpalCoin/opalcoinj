@@ -161,16 +161,32 @@ public class Block extends Message {
 
 
     /**
-     * <p>A utility method that calculates how much new Bitcoin would be created by the block at the given height.
-     * The inflation of Bitcoin is predictable and drops roughly every 4 years (210,000 blocks). At the dawn of
-     * the system it was 50 coins per block, in late 2012 it went to 25 coins per block, and so on. The size of
-     * a coinbase transaction is inflation plus fees.</p>
-     *
-     * <p>The half-life is controlled by {@link org.bitcoinj.core.NetworkParameters#getSubsidyDecreaseBlockCount()}.
-     * </p>
+     * <p>A utility method that calculates how much new Bitcoin would be created by the block at the given height.</p>
      */
     public Coin getBlockInflation(int height) {
-        return FIFTY_COINS.shiftRight(height / params.getSubsidyDecreaseBlockCount());
+        Coin subsidy = COIN.multiply(100000);
+
+        if (height == 0) {
+            // Genesis block
+            subsidy = COIN.multiply(10000);
+        } else if (height < 11) {
+            // Premine: First 10 block are 545,000,000 RDD
+            subsidy = COIN.multiply(545000000);
+        } else if (height < 10000) {
+            // Bonus reward for block 11 - 9,999 of 300,000 coins
+            subsidy = COIN.multiply(300000);
+        } else if (height < 20000) {
+            // Bonus reward for block 10,000 - 19,999 of 200,000 coins
+            subsidy = COIN.multiply(200000);
+        } else if (height < 30000) {
+            // Bonus reward for block 20,000 - 29,999 of 150,000 coins
+            subsidy = COIN.multiply(150000);
+        } else if (height >= 140000) {
+            // Subsidy is cut in half every 50,000 blocks starting at block 140000
+            subsidy = subsidy.shiftRight((height - 140000 + 50000) / 50000);
+        }
+
+        return subsidy;
     }
 
     private void readObject(ObjectInputStream ois) throws ClassNotFoundException, IOException {
