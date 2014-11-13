@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
+import java.net.ProtocolException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedList;
@@ -85,6 +86,8 @@ public class Block extends Message {
 
     /** If null, it means this object holds only the headers. */
     List<Transaction> transactions;
+
+    private byte[] signature;
 
     /** Stores the hash of the block. If null, getHash() will recalculate it. */
     private transient Sha256Hash hash;
@@ -238,6 +241,14 @@ public class Block extends Message {
             cursor += tx.getMessageSize();
             optimalEncodingMessageSize += tx.getOptimalEncodingMessageSize();
         }
+
+        if (version > params.POW_BLOCK_VERSION) {
+            int signatureLen = (int) readVarInt();
+            optimalEncodingMessageSize += VarInt.sizeOf(signatureLen);
+            signature = readBytes(signatureLen);
+            optimalEncodingMessageSize += signature.length;
+        }
+
         // No need to set length here. If length was not provided then it should be set at the end of parseLight().
         // If this is a genuine lazy parse then length must have been provided to the constructor.
         transactionsParsed = true;
@@ -428,6 +439,11 @@ public class Block extends Message {
                 tx.bitcoinSerialize(stream);
             }
         }
+
+        if (version > params.POW_BLOCK_VERSION) {
+            stream.write(new VarInt(signature.length).encode());
+            stream.write(signature);
+        }
     }
 
     /**
@@ -604,6 +620,7 @@ public class Block extends Message {
         block.time = time;
         block.difficultyTarget = difficultyTarget;
         block.transactions = null;
+        block.signature = null;
         block.hash = getHash().duplicate();
         return block;
     }
@@ -798,6 +815,12 @@ public class Block extends Message {
             if (transactions.get(i).isCoinBase())
                 throw new VerificationException("TX " + i + " is coinbase when it should not be.");
         }
+
+        if (isProofOfStake()) {
+            for (int i = 2; i < transactions.size(); i++)
+                if (transactions.get(i).isCoinStake())
+                    throw new VerificationException("TX " + i + " is coinstake when it should not be.");
+        }
     }
 
     /**
@@ -839,7 +862,7 @@ public class Block extends Message {
         checkSigOps();
         for (Transaction transaction : transactions)
             transaction.verify();
-        }
+    }
 
     /**
      * Verifies both the header and that the transactions hash to the merkle root.
@@ -994,6 +1017,14 @@ public class Block extends Message {
     public List<Transaction> getTransactions() {
        maybeParseTransactions();
        return ImmutableList.copyOf(transactions);
+    }
+
+    public boolean isProofOfStake() {
+        return transactions.size() > 1 && transactions.get(1).isCoinStake();
+    }
+
+    public boolean isProofOfWork() {
+        return !isProofOfStake();
     }
 
     // ///////////////////////////////////////////////////////////////////////////////////////////////
