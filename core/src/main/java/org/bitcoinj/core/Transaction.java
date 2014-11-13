@@ -177,8 +177,9 @@ public class Transaction extends ChildMessage implements Serializable {
         version = 2;
         inputs = new ArrayList<TransactionInput>();
         outputs = new ArrayList<TransactionOutput>();
+        time = System.currentTimeMillis() / 1000;
         // We don't initialize appearsIn deliberately as it's only useful for transactions stored in the wallet.
-        length = 8; // 8 for std fields
+        length = 12; // for std fields
     }
 
     /**
@@ -543,8 +544,8 @@ public class Transaction extends ChildMessage implements Serializable {
             scriptLen = varint.value;
             cursor += scriptLen + varint.getOriginalSizeInBytes();
         }
-        // 4 = length of lock_time field (uint32)
-        return cursor - offset + 4;
+        // 8 = length of lock_time field and time field (uint32)
+        return cursor - offset + 8;
     }
 
     @Override
@@ -620,10 +621,11 @@ public class Transaction extends ChildMessage implements Serializable {
     }
 
     /**
-     * A transaction is mature if it is either a building coinbase tx that is as deep or deeper than the required coinbase depth, or a non-coinbase tx.
+     * A transaction is mature if it is either a building coinbase/coinstake tx that is as deep or deeper than
+     * the required coinbase depth, or a non-coinbase/non-coinstake tx.
      */
     public boolean isMature() {
-        if (!isCoinBase())
+        if (!isCoinBase() && !isCoinStake())
             return true;
 
         if (getConfidence().getConfidenceType() != ConfidenceType.BUILDING)
@@ -645,18 +647,19 @@ public class Transaction extends ChildMessage implements Serializable {
         // Basic info about the tx.
         StringBuilder s = new StringBuilder();
         s.append(String.format("  %s: %s%n", getHashAsString(), getConfidence()));
+        s.append(String.format("  created at %s%n", new Date(time*1000).toString()));
         if (isTimeLocked()) {
-            String time;
+            String stime;
             if (lockTime < LOCKTIME_THRESHOLD) {
-                time = "block " + lockTime;
+                stime = "block " + lockTime;
                 if (chain != null) {
-                    time = time + " (estimated to be reached at " +
+                    stime = stime + " (estimated to be reached at " +
                             chain.estimateBlockTime((int)lockTime).toString() + ")";
                 }
             } else {
-                time = new Date(lockTime*1000).toString();
+                stime = new Date(lockTime*1000).toString();
             }
-            s.append(String.format("  time locked until %s%n", time));
+            s.append(String.format("  time locked until %s%n", stime));
         }
         if (inputs.size() == 0) {
             s.append(String.format("  INCOMPLETE: No inputs!%n"));
@@ -674,6 +677,8 @@ public class Transaction extends ChildMessage implements Serializable {
             }
             s.append("     == COINBASE TXN (scriptSig " + script + ")  (scriptPubKey " + script2 + ")\n");
             return s.toString();
+        } else if (isCoinStake()) {
+            s.append("     == COINSTAKE TXN\n");
         }
         for (TransactionInput in : inputs) {
             s.append("     ");
@@ -1055,8 +1060,9 @@ public class Transaction extends ChildMessage implements Serializable {
         for (TransactionOutput out : outputs)
             out.bitcoinSerialize(stream);
         uint32ToByteStreamLE(lockTime, stream);
+        if (version > params.POW_TX_VERSION)
+            uint32ToByteStreamLE(time, stream);
     }
-
 
     /**
      * Transactions can have an associated lock time, specified either as a block height or in seconds since the
@@ -1079,6 +1085,14 @@ public class Transaction extends ChildMessage implements Serializable {
         unCache();
         // TODO: Consider checking that at least one input has a non-final sequence number.
         this.lockTime = lockTime;
+    }
+
+    /**
+     * Transactions have a timestamp at creation.
+     */
+    public long getTime() {
+        maybeParse();
+        return time;
     }
 
     /**
@@ -1217,7 +1231,8 @@ public class Transaction extends ChildMessage implements Serializable {
             outpoints.add(input.getOutpoint());
         }
         try {
-            for (TransactionOutput output : outputs) {
+            for (int i = isCoinStake() ? 1 : 0; i < outputs.size(); i++) {
+                TransactionOutput output = outputs.get(i);
                 if (output.getValue().signum() < 0)    // getValue() can throw IllegalStateException
                     throw new VerificationException.NegativeValueOutput();
                 valueOut = valueOut.add(output.getValue());
