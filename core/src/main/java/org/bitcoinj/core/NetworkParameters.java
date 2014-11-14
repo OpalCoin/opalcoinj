@@ -67,6 +67,7 @@ public abstract class NetworkParameters implements Serializable {
 
     protected Block genesisBlock;
     protected BigInteger maxTarget;
+    protected BigInteger resetTarget;
     protected int port;
     protected long packetMagic;  // Indicates message origin network and is used to seek to the next message when stream state is unknown.
     protected int addressHeader;
@@ -93,7 +94,7 @@ public abstract class NetworkParameters implements Serializable {
     public static final int POW_TX_VERSION = 1;
     public static final int POW_BLOCK_VERSION = 2;
     public static final int COIN_YEAR_REWARD = 5;
-    protected int lastPoWBlock;
+    protected long lastPoWBlock;
 
     protected NetworkParameters() {
         alertSigningKey = SATOSHI_KEY;
@@ -321,6 +322,11 @@ public abstract class NetworkParameters implements Serializable {
         return maxTarget;
     }
 
+    /** Reset target for the initial PoSV blocks. */
+    public BigInteger getResetTarget() {
+        return resetTarget;
+    }
+
     /**
      * The key used to sign {@link org.bitcoinj.core.AlertMessage}s. You can use {@link org.bitcoinj.core.ECKey#verify(byte[], byte[], byte[])} to verify
      * signatures using it.
@@ -329,5 +335,5 @@ public abstract class NetworkParameters implements Serializable {
         return alertSigningKey;
     }
 
-    public int getLastPoWBlock() { return lastPoWBlock; }
+    public long getLastPoWBlock() { return lastPoWBlock; }
 }

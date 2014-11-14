@@ -836,69 +836,100 @@ public abstract class AbstractBlockChain {
     private static final Date testnetDiffDate = new Date(1329264000000L);
 
     /**
+     * Kimoto Gravity Well
+     */
+    private BigInteger kimotoGravityWell(StoredBlock storedLastSolved) throws BlockStoreException {
+        checkState(lock.isHeldByCurrentThread());
+
+        long timeDaySeconds = 24 * 60 * 60;
+        long pastSecondsMin = timeDaySeconds / 4;
+        long pastSecondsMax = timeDaySeconds * 7;
+
+        StoredBlock storedReading = storedLastSolved;
+        long heightLastSolved = storedLastSolved.getHeight();
+        long timeLastSolved = storedLastSolved.getHeader().getTimeSeconds();
+
+        if (heightLastSolved < 6000) {
+            pastSecondsMin = timeDaySeconds / 100;
+            pastSecondsMax = pastSecondsMin * 14;
+        }
+
+        long pastBlocksMin = pastSecondsMin / params.TARGET_SPACING;
+        long pastBlocksMax = pastSecondsMax / params.TARGET_SPACING;
+
+        long pastBlocksMass;
+        long pastRateActualSeconds;
+        long pastRateTargetSeconds;
+        double pastRateAdjustmentRatio;
+        BigInteger pastDifficultyAverage;
+        BigInteger pastDifficultyAveragePrev;
+        double eventHorizonDeviationFast;
+        double eventHorizonDeviationSlow;
+
+        long lastPoWBlock = params.getLastPoWBlock();
+        boolean fProofOfStake = heightLastSolved >= lastPoWBlock;
+
+        if (heightLastSolved < pastBlocksMin)
+            return params.getMaxTarget();
+        else if (fProofOfStake && (heightLastSolved - lastPoWBlock) < pastBlocksMin)
+            return params.getResetTarget();  // difficulty is reset at the first PoSV blocks
+
+        for (long i = 1; storedReading.getHeight() > (fProofOfStake ? lastPoWBlock : 0); i++) {
+            if (pastBlocksMax > 0 && i > pastBlocksMax)
+                break;
+
+            pastBlocksMass++;
+            Block blockReading = storedReading.getHeader();
+            BigInteger targetReading = Utils.decodeCompactBits(blockReading.getDifficultyTarget());
+
+            if (i == 1)
+                pastDifficultyAverage = targetReading;
+            else
+                pastDifficultyAverage = targetReading.subtract(pastDifficultyAveragePrev).divide(BigInteger.valueOf(i)).add(pastDifficultyAveragePrev);
+
+            pastDifficultyAveragePrev = pastDifficultyAverage;
+            pastRateActualSeconds = timeLastSolved - blockReading.getTimeSeconds();
+            pastRateTargetSeconds = params.TARGET_SPACING * pastBlocksMass;
+            pastRateAdjustmentRatio = 1.0;
+            pastRateActualSeconds = pastRateActualSeconds < 0 ? 0 : pastRateActualSeconds;
+
+            if (pastRateActualSeconds != 0 && pastRateTargetSeconds != 0)
+                pastRateAdjustmentRatio = double(pastRateTargetSeconds) / double(pastRateActualSeconds);
+
+            eventHorizonDeviationFast = 1 + (0.7084 * Math.pow(pastBlocksMass / 144.0, -1.228));
+            eventHorizonDeviationSlow = 1.0 / eventHorizonDeviationFast;
+
+            if (pastBlocksMass >= pastBlocksMin && (pastRateAdjustmentRatio <= eventHorizonDeviationSlow ||
+                    pastRateAdjustmentRatio >= eventHorizonDeviationFast))
+                    break;
+
+            storedReading = blockStore.get(blockReading.getPrevBlockHash());
+        }
+
+        BigInteger newTarget = pastDifficultyAverage;
+
+        if (pastRateActualSeconds != 0 && pastRateTargetSeconds != 0) {
+            newTarget = newTarget.multiply(BigInteger.valueOf(pastRateActualSeconds));
+            newTarget = newTarget.divide(BigInteger.valueOf(pastRateTargetSeconds));
+        }
+
+        if (newTarget.compareTo(params.getMaxTarget()) > 0)
+            newTarget = params.getMaxTarget();
+
+        return newTarget;
+    }
+
+    /**
      * Throws an exception if the blocks difficulty is not correct.
      */
     private void checkDifficultyTransitions(StoredBlock storedPrev, Block nextBlock) throws BlockStoreException, VerificationException {
         checkState(lock.isHeldByCurrentThread());
-        Block prev = storedPrev.getHeader();
-        
-        // Is this supposed to be a difficulty transition point?
-        if ((storedPrev.getHeight() + 1) % params.getInterval() != 0) {
 
-            // TODO: Refactor this hack after 0.5 is released and we stop supporting deserialization compatibility.
-            // This should be a method of the NetworkParameters, which should in turn be using singletons and a subclass
-            // for each network type. Then each network can define its own difficulty transition rules.
-            if (params.getId().equals(NetworkParameters.ID_TESTNET) && nextBlock.getTime().after(testnetDiffDate)) {
-                checkTestnetDifficulty(storedPrev, prev, nextBlock);
-                return;
-            }
-
-            // No ... so check the difficulty didn't actually change.
-            if (nextBlock.getDifficultyTarget() != prev.getDifficultyTarget())
-                throw new VerificationException("Unexpected change in difficulty at height " + storedPrev.getHeight() +
-                        ": " + Long.toHexString(nextBlock.getDifficultyTarget()) + " vs " +
-                        Long.toHexString(prev.getDifficultyTarget()));
-            return;
-        }
-
-        // We need to find a block far back in the chain. It's OK that this is expensive because it only occurs every
-        // two weeks after the initial block chain download.
-        long now = System.currentTimeMillis();
-        StoredBlock cursor = blockStore.get(prev.getHash());
-        for (int i = 0; i < params.getInterval() - 1; i++) {
-            if (cursor == null) {
-                // This should never happen. If it does, it means we are following an incorrect or busted chain.
-                throw new VerificationException(
-                        "Difficulty transition point but we did not find a way back to the genesis block.");
-            }
-            cursor = blockStore.get(cursor.getHeader().getPrevBlockHash());
-        }
-        long elapsed = System.currentTimeMillis() - now;
-        if (elapsed > 50)
-            log.info("Difficulty transition traversal took {}msec", elapsed);
-
-        Block blockIntervalAgo = cursor.getHeader();
-        int timespan = (int) (prev.getTimeSeconds() - blockIntervalAgo.getTimeSeconds());
-        // Limit the adjustment step.
-        final int targetTimespan = params.getTargetTimespan();
-        if (timespan < targetTimespan / 4)
-            timespan = targetTimespan / 4;
-        if (timespan > targetTimespan * 4)
-            timespan = targetTimespan * 4;
-
-        BigInteger newTarget = Utils.decodeCompactBits(prev.getDifficultyTarget());
-        newTarget = newTarget.multiply(BigInteger.valueOf(timespan));
-        newTarget = newTarget.divide(BigInteger.valueOf(targetTimespan));
-
-        if (newTarget.compareTo(params.getMaxTarget()) > 0) {
-            log.info("Difficulty hit proof of work limit: {}", newTarget.toString(16));
-            newTarget = params.getMaxTarget();
-        }
-
-        int accuracyBytes = (int) (nextBlock.getDifficultyTarget() >>> 24) - 3;
         long receivedTargetCompact = nextBlock.getDifficultyTarget();
+        int accuracyBytes = (int) (receivedTargetCompact >>> 24) - 3;
 
         // The calculated difficulty is to a higher precision than received, so reduce here.
+        BigInteger newTarget = kimotoGravityWell(storedPrev);
         BigInteger mask = BigInteger.valueOf(0xFFFFFFL).shiftLeft(accuracyBytes * 8);
         newTarget = newTarget.and(mask);
         long newTargetCompact = Utils.encodeCompactBits(newTarget);

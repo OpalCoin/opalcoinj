@@ -29,6 +29,7 @@ public class MainNetParams extends NetworkParameters {
     public MainNetParams() {
         super();
         maxTarget = Utils.decodeCompactBits(0x1e0ffff0L);
+        resetTarget = Utils.decodeCompactBits(0x1d00ffffL);
         dumpedPrivateKeyHeader = 189;
         addressHeader = 61;
         p2shHeader = 5;
