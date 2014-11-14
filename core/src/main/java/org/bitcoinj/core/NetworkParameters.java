@@ -115,7 +115,7 @@ public abstract class NetworkParameters implements Serializable {
             Script.writeBytes(scriptPubKeyBytes, Utils.HEX.decode
                     ("040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9"));
             scriptPubKeyBytes.write(ScriptOpCodes.OP_CHECKSIG);
-            t.addOutput(new TransactionOutput(n, t, Coin.valueof(10000), scriptPubKeyBytes.toByteArray()));
+            t.addOutput(new TransactionOutput(n, t, Coin.valueOf(10000), scriptPubKeyBytes.toByteArray()));
         } catch (Exception e) {
             // Cannot happen.
             throw new RuntimeException(e);

@@ -854,15 +854,15 @@ public abstract class AbstractBlockChain {
             pastSecondsMax = pastSecondsMin * 14;
         }
 
-        long pastBlocksMin = pastSecondsMin / params.TARGET_SPACING;
-        long pastBlocksMax = pastSecondsMax / params.TARGET_SPACING;
+        long pastBlocksMin = pastSecondsMin / NetworkParameters.TARGET_SPACING;
+        long pastBlocksMax = pastSecondsMax / NetworkParameters.TARGET_SPACING;
 
-        long pastBlocksMass;
-        long pastRateActualSeconds;
-        long pastRateTargetSeconds;
+        long pastBlocksMass = 0;
+        long pastRateActualSeconds = 0;
+        long pastRateTargetSeconds = 0;
         double pastRateAdjustmentRatio;
-        BigInteger pastDifficultyAverage;
-        BigInteger pastDifficultyAveragePrev;
+        BigInteger pastDifficultyAverage = BigInteger.ZERO;
+        BigInteger pastDifficultyAveragePrev = BigInteger.ZERO;
         double eventHorizonDeviationFast;
         double eventHorizonDeviationSlow;
 
@@ -889,12 +889,12 @@ public abstract class AbstractBlockChain {
 
             pastDifficultyAveragePrev = pastDifficultyAverage;
             pastRateActualSeconds = timeLastSolved - blockReading.getTimeSeconds();
-            pastRateTargetSeconds = params.TARGET_SPACING * pastBlocksMass;
+            pastRateTargetSeconds = NetworkParameters.TARGET_SPACING * pastBlocksMass;
             pastRateAdjustmentRatio = 1.0;
             pastRateActualSeconds = pastRateActualSeconds < 0 ? 0 : pastRateActualSeconds;
 
             if (pastRateActualSeconds != 0 && pastRateTargetSeconds != 0)
-                pastRateAdjustmentRatio = double(pastRateTargetSeconds) / double(pastRateActualSeconds);
+                pastRateAdjustmentRatio = (double)pastRateTargetSeconds / (double)pastRateActualSeconds;
 
             eventHorizonDeviationFast = 1 + (0.7084 * Math.pow(pastBlocksMass / 144.0, -1.228));
             eventHorizonDeviationSlow = 1.0 / eventHorizonDeviationFast;
@@ -941,27 +941,6 @@ public abstract class AbstractBlockChain {
 
     private void checkTestnetDifficulty(StoredBlock storedPrev, Block prev, Block next) throws VerificationException, BlockStoreException {
         checkState(lock.isHeldByCurrentThread());
-        // After 15th February 2012 the rules on the testnet change to avoid people running up the difficulty
-        // and then leaving, making it too hard to mine a block. On non-difficulty transition points, easy
-        // blocks are allowed if there has been a span of 20 minutes without one.
-        final long timeDelta = next.getTimeSeconds() - prev.getTimeSeconds();
-        // There is an integer underflow bug in bitcoin-qt that means mindiff blocks are accepted when time
-        // goes backwards.
-        if (timeDelta >= 0 && timeDelta <= NetworkParameters.TARGET_SPACING * 2) {
-            // Walk backwards until we find a block that doesn't have the easiest proof of work, then check
-            // that difficulty is equal to that one.
-            StoredBlock cursor = storedPrev;
-            while (!cursor.getHeader().equals(params.getGenesisBlock()) &&
-                   cursor.getHeight() % params.getInterval() != 0 &&
-                   cursor.getHeader().getDifficultyTargetAsInteger().equals(params.getMaxTarget()))
-                cursor = cursor.getPrev(blockStore);
-            BigInteger cursorTarget = cursor.getHeader().getDifficultyTargetAsInteger();
-            BigInteger newTarget = next.getDifficultyTargetAsInteger();
-            if (!cursorTarget.equals(newTarget))
-                throw new VerificationException("Testnet block transition that is not allowed: " +
-                    Long.toHexString(cursor.getHeader().getDifficultyTarget()) + " vs " +
-                    Long.toHexString(next.getDifficultyTarget()));
-        }
     }
 
     /**

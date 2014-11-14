@@ -178,34 +178,6 @@ public class BlockChainTest {
     }
 
     @Test
-    public void difficultyTransitions() throws Exception {
-        // Add a bunch of blocks in a loop until we reach a difficulty transition point. The unit test params have an
-        // artificially shortened period.
-        Block prev = unitTestParams.getGenesisBlock();
-        Utils.setMockClock(System.currentTimeMillis()/1000);
-        for (int i = 0; i < unitTestParams.getInterval() - 1; i++) {
-            Block newBlock = prev.createNextBlock(coinbaseTo, Utils.currentTimeSeconds());
-            assertTrue(chain.add(newBlock));
-            prev = newBlock;
-            // The fake chain should seem to be "fast" for the purposes of difficulty calculations.
-            Utils.rollMockClock(2);
-        }
-        // Now add another block that has no difficulty adjustment, it should be rejected.
-        try {
-            chain.add(prev.createNextBlock(coinbaseTo, Utils.currentTimeSeconds()));
-            fail();
-        } catch (VerificationException e) {
-        }
-        // Create a new block with the right difficulty target given our blistering speed relative to the huge amount
-        // of time it's supposed to take (set in the unit test network parameters).
-        Block b = prev.createNextBlock(coinbaseTo, Utils.currentTimeSeconds());
-        b.setDifficultyTarget(0x201fFFFFL);
-        b.solve();
-        assertTrue(chain.add(b));
-        // Successfully traversed a difficulty transition period.
-    }
-
-    @Test
     public void badDifficulty() throws Exception {
         assertTrue(testNetChain.add(getBlock1()));
         Block b2 = getBlock2();

@@ -51,11 +51,7 @@ public abstract class AbstractFullPrunedBlockChainTest
     @Before
     public void setUp() throws Exception {
         BriefLogFormatter.init();
-        params = new UnitTestParams() {
-            @Override public int getInterval() {
-                return 10000;
-            }
-        };
+        params = new UnitTestParams();
     }
 
     public abstract FullPrunedBlockStore createStore(NetworkParameters params, int blockCount)

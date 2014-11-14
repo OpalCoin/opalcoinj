@@ -38,11 +38,8 @@ public class UnitTestParams extends NetworkParameters {
         genesisBlock.setDifficultyTarget(Block.EASIEST_DIFFICULTY_TARGET);
         genesisBlock.solve();
         port = 18333;
-        interval = 10;
         dumpedPrivateKeyHeader = 239;
-        targetTimespan = 200000000;  // 6 years. Just a very big number.
         spendableCoinbaseDepth = 5;
-        subsidyDecreaseBlockCount = 100;
         dnsSeeds = null;
     }
 

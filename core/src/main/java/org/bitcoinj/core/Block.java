@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
-import java.net.ProtocolException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedList;
@@ -167,23 +166,23 @@ public class Block extends Message {
      * <p>A utility method that calculates how much new Bitcoin would be created by the block at the given height.</p>
      */
     public Coin getBlockInflation(int height) {
-        Coin subsidy = COIN.multiply(100000);
+        Coin subsidy = Coin.COIN.multiply(100000);
 
         if (height == 0) {
             // Genesis block
-            subsidy = COIN.multiply(10000);
+            subsidy = Coin.COIN.multiply(10000);
         } else if (height < 11) {
             // Premine: First 10 block are 545,000,000 RDD
-            subsidy = COIN.multiply(545000000);
+            subsidy = Coin.COIN.multiply(545000000);
         } else if (height < 10000) {
             // Bonus reward for block 11 - 9,999 of 300,000 coins
-            subsidy = COIN.multiply(300000);
+            subsidy = Coin.COIN.multiply(300000);
         } else if (height < 20000) {
             // Bonus reward for block 10,000 - 19,999 of 200,000 coins
-            subsidy = COIN.multiply(200000);
+            subsidy = Coin.COIN.multiply(200000);
         } else if (height < 30000) {
             // Bonus reward for block 20,000 - 29,999 of 150,000 coins
-            subsidy = COIN.multiply(150000);
+            subsidy = Coin.COIN.multiply(150000);
         } else if (height >= 140000) {
             // Subsidy is cut in half every 50,000 blocks starting at block 140000
             subsidy = subsidy.shiftRight((height - 140000 + 50000) / 50000);
@@ -242,7 +241,7 @@ public class Block extends Message {
             optimalEncodingMessageSize += tx.getOptimalEncodingMessageSize();
         }
 
-        if (version > params.POW_BLOCK_VERSION) {
+        if (version > NetworkParameters.POW_BLOCK_VERSION) {
             int signatureLen = (int) readVarInt();
             optimalEncodingMessageSize += VarInt.sizeOf(signatureLen);
             signature = readBytes(signatureLen);
